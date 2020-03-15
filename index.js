@@ -1,6 +1,7 @@
 const https = require('https');
 const express = require('express');
 const app = express();
+const bodyParser = require('body-parser');
 
 
 const mysql      = require('mysql');
@@ -12,7 +13,7 @@ const connection = mysql.createConnection({
 });
 
 
-
+app.use(bodyParser());
 app.get('/', function (req, res) {
 	res.setHeader('content-type', 'text/html');
 	
@@ -42,6 +43,101 @@ app.get('/classes', function (req, res) {
 			res.send(classes);
 		});
 });
+
+
+app.get('/login', function (req, res) {
+	const login = req.query["login"] || "";
+	const password = req.query["password"] || "";
+	console.log('login = ', login);
+	console.log('password = ', password);
+	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}' AND PASSWORD = '${password}';`, function (error, results, fields) {
+		if (error) throw error;
+		const amount = results.length;
+		console.log('amount = ', amount);
+		if (amount === 0) {
+			return res.send({success: false, error: "Имя пользователя или пароль неправильные!"});
+		}
+		const user = results[0];
+		console.log('user = ', user);
+		res.send({success: true, user: user});
+	});
+});
+
+
+app.post('/login', function (req, res) {
+	console.log('body = ', req.body);
+	const login = req.body["login"] || "";
+	const password = req.body["password"] || "";
+	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}' AND PASSWORD = '${password}';`, function (error, results, fields) {
+		if (error) throw error;
+		const amount = results.length;
+		console.log('amount = ', amount);
+		if (amount === 0) {
+			return res.send({success: false, error: "Имя пользователя или пароль неправильные!"});
+		}
+		const user = results[0];
+		console.log('user = ', user);
+		res.send({success: true, user: user});
+	});
+});
+
+app.get('/register', function (req, res) {
+	const login = req.query["login"] || "";
+	const password = req.query["password"] || "";
+	const firstName = req.query["first_name"] || "";
+	const secondName = req.query["second_name"] || "";
+	const thirdName = req.query["third_name"] || "";
+	
+	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}';`, function (error, results, fields) {
+		if (error) throw error;
+		const amount = results.length;
+		if (amount > 0) {
+			return res.send({success: false, error: "Такой логин уже есть!"});
+		}
+		
+		const query = `
+			INSERT INTO users(ID_USER, LOGIN, PASSWORD, FIRST_NAME, SECOND_NAME, THIRD_NAME, IS_ADMIN) VALUES (
+				DEFAULT, '${login}', '${password}', '${firstName}', '${secondName}', '${thirdName}', FALSE
+			);
+		`;
+		connection.query(query);
+		res.send({success: true});
+	});
+});
+
+app.post('/register', function (req, res) {
+	const login = req.body["login"] || "";
+	const password = req.body["password"] || "";
+	const firstName = req.body["first_name"] || "";
+	const secondName = req.body["second_name"] || "";
+	const thirdName = req.body["third_name"] || "";
+	
+	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}';`, function (error, results, fields) {
+		if (error) throw error;
+		const amount = results.length;
+		if (amount > 0) {
+			return res.send({success: false, error: "Такой логин уже есть!"});
+		}
+		
+		const query = `
+			INSERT INTO users(ID_USER, LOGIN, PASSWORD, FIRST_NAME, SECOND_NAME, THIRD_NAME, IS_ADMIN) VALUES (
+				DEFAULT, '${login}', '${password}', '${firstName}', '${secondName}', '${thirdName}', FALSE
+			);
+		`;
+		connection.query(query);
+		res.send({success: true});
+	});
+});
+
+
+app.get('/admin', function (req, res) {
+	const id = +req.query["id"] || -1;
+	connection.query(`UPDATE users SET IS_ADMIN=1 WHERE ID_USER='${id}'`, function (error, results, fields) {
+		if (error) throw error;
+		res.send('ok');
+	});
+});
+
 
 
 connection.connect(function(err) {
