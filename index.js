@@ -2,6 +2,7 @@ const https = require('https');
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
+const net = require('net');
 
 
 const mysql      = require('mysql');
@@ -153,9 +154,51 @@ connection.connect(function(err) {
 	});
 	
 	
+	tcpClients = [];
+	function removeTCPClient(socket) {
+		const index = tcpClients.indexOf(socket);
+		if (index > -1) {
+			tcpClients.splice(index, 1);
+		}
+	}
+	const server = net.createServer((socket) => {
+		console.log('new socket!!!');
+		tcpClients.push(socket);
+		socket.on('data', (data) => {
+			console.log('new data!!!', data);
+			console.log('string data = ', data.toString());
+			tcpClients.forEach(client => {
+				console.log("Отправка ...");
+				client.write(Buffer.from(data.toString()));
+			});
+		});
+		socket.on('close', () => {
+			console.log('!!!close');
+			removeTCPClient(socket);
+		});
+		socket.on('end', () => {
+			console.log('!!!END');
+			removeTCPClient(socket);
+		});
+		socket.on('error', (err) => {
+			console.log('!!!ERROR', err);
+			removeTCPClient(socket);
+		});
+		
+		//socket.end('goodbye\n');
+	}).on('error', (err) => {
+		throw err;
+	});
+
+
+	server.listen(3001, () => {
+	  console.log('opened server on', server.address());
+	});
 	
 	
-	const startDate = "2020.02.24";
+	
+	
+	/*const startDate = "2020.02.24";
 	const finishDate = "2020.03.01";
 	const url = `https://ruz.fa.ru/api/schedule/group/8892?start=${startDate}&finish=${finishDate}`;
 	console.log('url = ', url);
@@ -170,7 +213,7 @@ connection.connect(function(err) {
 			const obj = JSON.parse(data);
 			//console.log("obj = ", obj);
 		});
-	});
+	});*/
 });
 
 
