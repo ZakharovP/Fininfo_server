@@ -144,7 +144,7 @@ app.get('/admin', function (req, res) {
 connection.connect(function(err) {
 	if (err) {
 		console.error('error connecting: ' + err.stack);
-		throw error;
+		throw err;
 	}
 	console.log("Соединение с БД успешно запущено!");
 	
@@ -197,7 +197,7 @@ connection.connect(function(err) {
 	
 	
 	
-	
+	// получение данных с вуза и их вывод (может быть понадобится для заполнения БД)
 	/*const startDate = "2020.02.24";
 	const finishDate = "2020.03.01";
 	const url = `https://ruz.fa.ru/api/schedule/group/8892?start=${startDate}&finish=${finishDate}`;
