@@ -3,7 +3,6 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const net = require('net');
-const fs = require('fs');
 
 
 const mysql      = require('mysql');
@@ -18,14 +17,14 @@ const connection = mysql.createConnection({
 app.use(bodyParser());
 app.get('/', function (req, res) {
 	res.setHeader('content-type', 'text/html');
-
+	
 	res.send('Hello <b>World!</b>');
 });
 
 app.get('/teachers', function (req, res) {
 	connection.query('SELECT * FROM teachers', function (error, results, fields) {
 		if (error) throw error;
-
+		
 		const teachers = JSON.stringify(results);
 		res.setHeader('content-type', 'application/json');
 		res.send(teachers);
@@ -36,10 +35,10 @@ app.get('/classes', function (req, res) {
 	connection.query(`
 		SELECT classes.*, CONCAT(teachers.SECOND_NAME, ' ', teachers.FIRST_NAME, ' ', teachers.THIRD_NAME) TEACHER_NAME, groups.GROUP_NAME
 		FROM classes LEFT JOIN teachers ON classes.ID_TEACHER = teachers.ID_TEACHER
-		LEFT JOIN groups ON classes.ID_GROUP = groups.ID_GROUP`,
+		LEFT JOIN groups ON classes.ID_GROUP = groups.ID_GROUP`, 
 		function (error, results, fields) {
 			if (error) throw error;
-
+		
 			const classes = JSON.stringify(results);
 			res.setHeader('content-type', 'application/json');
 			res.send(classes);
@@ -89,14 +88,14 @@ app.get('/register', function (req, res) {
 	const firstName = req.query["first_name"] || "";
 	const secondName = req.query["second_name"] || "";
 	const thirdName = req.query["third_name"] || "";
-
+	
 	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}';`, function (error, results, fields) {
 		if (error) throw error;
 		const amount = results.length;
 		if (amount > 0) {
 			return res.send({success: false, error: "Такой логин уже есть!"});
 		}
-
+		
 		const query = `
 			INSERT INTO users(ID_USER, LOGIN, PASSWORD, FIRST_NAME, SECOND_NAME, THIRD_NAME, IS_ADMIN) VALUES (
 				DEFAULT, '${login}', '${password}', '${firstName}', '${secondName}', '${thirdName}', FALSE
@@ -113,14 +112,14 @@ app.post('/register', function (req, res) {
 	const firstName = req.body["first_name"] || "";
 	const secondName = req.body["second_name"] || "";
 	const thirdName = req.body["third_name"] || "";
-
+	
 	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}';`, function (error, results, fields) {
 		if (error) throw error;
 		const amount = results.length;
 		if (amount > 0) {
 			return res.send({success: false, error: "Такой логин уже есть!"});
 		}
-
+		
 		const query = `
 			INSERT INTO users(ID_USER, LOGIN, PASSWORD, FIRST_NAME, SECOND_NAME, THIRD_NAME, IS_ADMIN) VALUES (
 				DEFAULT, '${login}', '${password}', '${firstName}', '${secondName}', '${thirdName}', FALSE
@@ -148,13 +147,13 @@ connection.connect(function(err) {
 		throw err;
 	}
 	console.log("Соединение с БД успешно запущено!");
-
+	
 	console.log('connected as id ' + connection.threadId);
 	app.listen(3000, function () {
 	  console.log('Example app listening on port 3000!');
 	});
-
-
+	
+	
 	tcpClients = [];
 	function removeTCPClient(socket) {
 		const index = tcpClients.indexOf(socket);
@@ -162,66 +161,16 @@ connection.connect(function(err) {
 			tcpClients.splice(index, 1);
 		}
 	}
-	
 	const server = net.createServer((socket) => {
 		console.log('new socket!!!');
 		tcpClients.push(socket);
-		let body = Buffer.from('');
-		socket.on('data', bytes => {
-			body = Buffer.concat([body, bytes]);
-			//console.log('Получено байт = ', bytes.length);
-			//console.log('Всего байт = ', body.length)
-			/*if (body.length >= 287900) {
-				let buff = Buffer.from(body.toString(), 'base64');
-				//console.log('Декодированных байт = ', decodedData.length);
-				fs.writeFileSync('tcp.jpg', buff);
-				body = Buffer.from('');
-				console.log('СОХРАНЕНО!!!');
-			}*/
-
-			const sepIndex = body.lastIndexOf('\0');
-			if (sepIndex > -1) {
-				const datas = body.slice(0, sepIndex).toString();
-				body = body.slice(sepIndex + 1, body.length);
-				for (data of datas.split("\0")) {
-					const dataType = data[data.length-1];
-					data = data.slice(0, data.length - 1);
-					if (dataType === '\1') {
-						console.log('data = ', data);
-						console.log('string data = ', data.toString());
-						data = JSON.parse(data);
-						
-						const text = data["text"];
-						const userId = 8;
-						connection.query(`INSERT INTO messages(ID_USER, text) VALUES(${userId}, '${text}')`, function (error, results, fields) {
-							if (error) throw error;
-							console.log('data = ', data);
-							let newData = {
-								"text": text,
-								"user_id": userId,
-								"user": "Вася"
-							};
-							console.log('newData = ', data);
-							newData = Buffer.from(JSON.stringify(newData)) + '\1' + '\0';
-							tcpClients.forEach(client => {
-								console.log("Отправка ...");
-								client.write(newData);
-							});
-						});
-					} else if (dataType === '\2') {
-						console.log('Что-то другое!!!');
-						console.log('Получено байт = ', bytes.length);
-						console.log('Всего байт = ', body.length)
-						let buff = Buffer.from(data, 'base64');
-						//console.log('Декодированных байт = ', decodedData.length);
-						fs.writeFileSync('tcp.jpg', buff);
-						body = Buffer.from('');
-						console.log('СОХРАНЕНО!!!');
-					}
-
-				}
-			}
-
+		socket.on('data', (data) => {
+			console.log('new data!!!', data);
+			console.log('string data = ', data.toString());
+			tcpClients.forEach(client => {
+				console.log("Отправка ...");
+				client.write(Buffer.from(data.toString()));
+			});
 		});
 		socket.on('close', () => {
 			console.log('!!!close');
@@ -236,40 +185,19 @@ connection.connect(function(err) {
 			removeTCPClient(socket);
 		});
 		
-		connection.query(`SELECT * FROM messages;`, function (error, results, fields) {
-			if (error) throw error;
-			const messages = results;
-			
-			messages.forEach(message => {
-				let data = {
-					"text": message["text"],
-					"user_id": message["ID_USER"],
-					"user": "Вася"
-				};
-				console.log('init data = ', data);
-				data = Buffer.from(JSON.stringify(data)) + '\1' + '\0';
-				socket.write(data);
-			});
-			
-		});
-		
-		
-		
-
 		//socket.end('goodbye\n');
 	}).on('error', (err) => {
 		throw err;
 	});
-	
-	
+
 
 	server.listen(3001, () => {
 	  console.log('opened server on', server.address());
 	});
-
-
-
-
+	
+	
+	
+	// получение данных с вуза и их вывод (может быть понадобится для заполнения БД)
 	/*const startDate = "2020.02.24";
 	const finishDate = "2020.03.01";
 	const url = `https://ruz.fa.ru/api/schedule/group/8892?start=${startDate}&finish=${finishDate}`;
@@ -286,4 +214,10 @@ connection.connect(function(err) {
 			//console.log("obj = ", obj);
 		});
 	});*/
+});
+
+
+process.on('exit', function() {
+	console.log('closing...');
+	connection.end();
 });
