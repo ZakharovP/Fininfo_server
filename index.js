@@ -4,6 +4,7 @@ const app = express();
 const bodyParser = require('body-parser');
 const net = require('net');
 const fs = require('fs');
+const path = require('path');
 
 
 const mysql      = require('mysql');
@@ -14,8 +15,9 @@ const connection = mysql.createConnection({
 	database : 'fininfo_bd'
 });
 
-
+app.use("/static", express.static(path.join(__dirname, '/static')));
 app.use(bodyParser());
+
 app.get('/', function (req, res) {
 	res.setHeader('content-type', 'text/html');
 
@@ -162,7 +164,7 @@ connection.connect(function(err) {
 			tcpClients.splice(index, 1);
 		}
 	}
-	
+
 	const server = net.createServer((socket) => {
 		console.log('new socket!!!');
 		tcpClients.push(socket);
@@ -170,36 +172,30 @@ connection.connect(function(err) {
 		socket.on('data', bytes => {
 			body = Buffer.concat([body, bytes]);
 			//console.log('Получено байт = ', bytes.length);
-			//console.log('Всего байт = ', body.length)
-			/*if (body.length >= 287900) {
-				let buff = Buffer.from(body.toString(), 'base64');
-				//console.log('Декодированных байт = ', decodedData.length);
-				fs.writeFileSync('tcp.jpg', buff);
-				body = Buffer.from('');
-				console.log('СОХРАНЕНО!!!');
-			}*/
-
+			//console.log('Всего байт в body = ', body.length)
 			const sepIndex = body.lastIndexOf('\0');
+			const userId = 8;
 			if (sepIndex > -1) {
 				const datas = body.slice(0, sepIndex).toString();
 				body = body.slice(sepIndex + 1, body.length);
 				for (data of datas.split("\0")) {
 					const dataType = data[data.length-1];
 					data = data.slice(0, data.length - 1);
+					console.log('!!!!');
 					if (dataType === '\1') {
 						console.log('data = ', data);
 						console.log('string data = ', data.toString());
 						data = JSON.parse(data);
-						
+
 						const text = data["text"];
-						const userId = 8;
 						connection.query(`INSERT INTO messages(ID_USER, text) VALUES(${userId}, '${text}')`, function (error, results, fields) {
 							if (error) throw error;
 							console.log('data = ', data);
 							let newData = {
 								"text": text,
 								"user_id": userId,
-								"user": "Вася"
+								"user": "Вася",
+								"image": ""
 							};
 							console.log('newData = ', data);
 							newData = Buffer.from(JSON.stringify(newData)) + '\1' + '\0';
@@ -214,8 +210,25 @@ connection.connect(function(err) {
 						console.log('Всего байт = ', body.length)
 						let buff = Buffer.from(data, 'base64');
 						//console.log('Декодированных байт = ', decodedData.length);
-						fs.writeFileSync('tcp.jpg', buff);
-						body = Buffer.from('');
+						const filename = parseInt(Math.random() * 10**14).toString() + ".jpg";
+
+						fs.writeFile(path.join('static', 'img', filename), buff, (error) => {
+							if (error) throw err;
+							connection.query(`INSERT INTO messages(ID_USER, text, image) VALUES(${userId}, '', '${filename}')`, function (error, results, fields) {
+								let newData = {
+									"text": "",
+									"image": filename,
+									"user_id": userId,
+									"user": "Вася"
+								};
+								newData = Buffer.from(JSON.stringify(newData)) + '\1' + '\0';
+								tcpClients.forEach(client => {
+									console.log("Отправка картинки ...");
+									client.write(newData);
+								});
+							});
+						});
+						//body = Buffer.from('');
 						console.log('СОХРАНЕНО!!!');
 					}
 
@@ -235,33 +248,34 @@ connection.connect(function(err) {
 			console.log('!!!ERROR', err);
 			removeTCPClient(socket);
 		});
-		
+
 		connection.query(`SELECT * FROM messages;`, function (error, results, fields) {
 			if (error) throw error;
 			const messages = results;
-			
+
 			messages.forEach(message => {
 				let data = {
 					"text": message["text"],
 					"user_id": message["ID_USER"],
-					"user": "Вася"
+					"user": "Вася",
+					"image": message["image"] || ""
 				};
 				console.log('init data = ', data);
 				data = Buffer.from(JSON.stringify(data)) + '\1' + '\0';
 				socket.write(data);
 			});
-			
+
 		});
-		
-		
-		
+
+
+
 
 		//socket.end('goodbye\n');
 	}).on('error', (err) => {
 		throw err;
 	});
-	
-	
+
+
 
 	server.listen(3001, () => {
 	  console.log('opened server on', server.address());
@@ -276,11 +290,9 @@ connection.connect(function(err) {
 	console.log('url = ', url);
 	https.get(url, (resp) => {
 		let data = '';
-
 		resp.on('data', (chunk) => {
 			data += chunk;
 		});
-
 		resp.on('end', () => {
 			const obj = JSON.parse(data);
 			//console.log("obj = ", obj);
