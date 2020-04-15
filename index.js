@@ -52,35 +52,35 @@ app.get('/classes', function (req, res) {
 app.get('/login', function (req, res) {
 	const login = req.query["login"] || "";
 	const password = req.query["password"] || "";
-	console.log('login = ', login);
-	console.log('password = ', password);
+	//console.log('login = ', login);
+	//console.log('password = ', password);
 	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}' AND PASSWORD = '${password}';`, function (error, results, fields) {
 		if (error) throw error;
 		const amount = results.length;
-		console.log('amount = ', amount);
+		//console.log('amount = ', amount);
 		if (amount === 0) {
 			return res.send({success: false, error: "Имя пользователя или пароль неправильные!"});
 		}
 		const user = results[0];
-		console.log('user = ', user);
+		//console.log('user = ', user);
 		res.send({success: true, user: user});
 	});
 });
 
 
 app.post('/login', function (req, res) {
-	console.log('body = ', req.body);
+	//console.log('body = ', req.body);
 	const login = req.body["login"] || "";
 	const password = req.body["password"] || "";
 	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}' AND PASSWORD = '${password}';`, function (error, results, fields) {
 		if (error) throw error;
 		const amount = results.length;
-		console.log('amount = ', amount);
+		//console.log('amount = ', amount);
 		if (amount === 0) {
 			return res.send({success: false, error: "Имя пользователя или пароль неправильные!"});
 		}
 		const user = results[0];
-		console.log('user = ', user);
+		//console.log('user = ', user);
 		res.send({success: true, user: user});
 	});
 });
@@ -133,6 +133,37 @@ app.post('/register', function (req, res) {
 	});
 });
 
+app.get('/rooms', function(req, res) {
+	const query = `
+		SELECT * FROM rooms;
+	`;
+	connection.query(query, function(error, results, fields) {
+		if (error) throw error;
+		const rooms = JSON.stringify(results);
+		res.setHeader('content-type', 'application/json');
+		res.send(rooms);
+		//res.send("rooms ok!!!!");
+	});
+	
+});
+
+app.post('/create_room', function(req, res) {
+	const roomTitle = req.body["room"] || "";
+	if (!roomTitle) {
+		return res.send({success: false});
+	}
+	const query = `
+		INSERT INTO rooms(ID_ROOM, title) VALUES (
+			DEFAULT, '${roomTitle}'
+		);
+	`;
+	connection.query(query, function (error, results, fields) {
+		if (error) throw error;
+		res.send({success: true});
+	});
+	
+});
+
 
 app.get('/admin', function (req, res) {
 	const id = +req.query["id"] || -1;
@@ -151,7 +182,7 @@ connection.connect(function(err) {
 	}
 	console.log("Соединение с БД успешно запущено!");
 
-	console.log('connected as id ' + connection.threadId);
+	//console.log('connected as id ' + connection.threadId);
 	app.listen(3000, function () {
 	  console.log('Example app listening on port 3000!');
 	});
@@ -181,16 +212,16 @@ connection.connect(function(err) {
 				for (data of datas.split("\0")) {
 					const dataType = data[data.length-1];
 					data = data.slice(0, data.length - 1);
-					console.log('!!!!');
+					//console.log('!!!!');
 					if (dataType === '\1') {
-						console.log('data = ', data);
-						console.log('string data = ', data.toString());
+						//console.log('data = ', data);
+						//console.log('string data = ', data.toString());
 						data = JSON.parse(data);
 
 						const text = data["text"];
 						connection.query(`INSERT INTO messages(ID_USER, text) VALUES(${userId}, '${text}')`, function (error, results, fields) {
 							if (error) throw error;
-							console.log('data = ', data);
+							//console.log('data = ', data);
 							let newData = {
 								"text": text,
 								"user_id": userId,
@@ -205,9 +236,9 @@ connection.connect(function(err) {
 							});
 						});
 					} else if (dataType === '\2') {
-						console.log('Что-то другое!!!');
-						console.log('Получено байт = ', bytes.length);
-						console.log('Всего байт = ', body.length)
+						//console.log('Что-то другое!!!');
+						//console.log('Получено байт = ', bytes.length);
+						//console.log('Всего байт = ', body.length)
 						let buff = Buffer.from(data, 'base64');
 						//console.log('Декодированных байт = ', decodedData.length);
 						const filename = parseInt(Math.random() * 10**14).toString() + ".jpg";
