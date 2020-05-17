@@ -140,6 +140,7 @@ app.get('/rooms', function(req, res) {
 	connection.query(query, function(error, results, fields) {
 		if (error) throw error;
 		const rooms = JSON.stringify(results);
+		console.log("rooms = ", rooms);
 		res.setHeader('content-type', 'application/json');
 		res.send(rooms);
 		//res.send("rooms ok!!!!");
@@ -159,7 +160,8 @@ app.post('/create_room', function(req, res) {
 	`;
 	connection.query(query, function (error, results, fields) {
 		if (error) throw error;
-		res.send({success: true});
+		const newRoom = JSON.stringify(results);
+		res.send({success: true, id: results.insertId, title: roomTitle});
 	});
 	
 });
@@ -217,24 +219,53 @@ connection.connect(function(err) {
 						//console.log('data = ', data);
 						//console.log('string data = ', data.toString());
 						data = JSON.parse(data);
-
-						const text = data["text"];
-						connection.query(`INSERT INTO messages(ID_USER, text) VALUES(${userId}, '${text}')`, function (error, results, fields) {
-							if (error) throw error;
-							//console.log('data = ', data);
-							let newData = {
-								"text": text,
-								"user_id": userId,
-								"user": "Вася",
-								"image": ""
-							};
-							console.log('newData = ', data);
-							newData = Buffer.from(JSON.stringify(newData)) + '\1' + '\0';
-							tcpClients.forEach(client => {
-								console.log("Отправка ...");
-								client.write(newData);
+						const dataType = data["type"];
+						console.log("TCP::: получены данные = ", data);
+						
+						if (dataType === "new") {
+							const text = data["text"];
+							const roomId = data["roomId"];
+							connection.query(`INSERT INTO messages(ID_USER, text, ID_ROOM) VALUES(${userId}, '${text}', ${roomId})`, function (error, results, fields) {
+								if (error) throw error;
+								//console.log('data = ', data);
+								let newData = {
+									"text": text,
+									"user_id": userId,
+									"user": "Вася",
+									"image": ""
+								};
+								console.log('newData = ', data);
+								newData = Buffer.from(JSON.stringify(newData)) + '\1' + '\0';
+								tcpClients.forEach(client => {
+									if (roomId === client.roomId) {
+										console.log("Отправка ...");
+										client.write(newData);
+									}
+								});
 							});
-						});
+						} else if (dataType === "init") {
+							const roomId = data["roomId"];
+							socket.roomId = roomId;
+							connection.query(`SELECT * FROM messages WHERE ID_ROOM=${roomId};`, function (error, results, fields) {
+								if (error) throw error;
+								const messages = results;
+
+								messages.forEach(message => {
+									let data = {
+										"text": message["text"],
+										"user_id": message["ID_USER"],
+										"user": "Вася",
+										"image": message["image"] || ""
+									};
+									console.log('init data = ', data);
+									data = Buffer.from(JSON.stringify(data)) + '\1' + '\0';
+									socket.write(data);
+								});
+
+							});
+						}
+
+						
 					} else if (dataType === '\2') {
 						//console.log('Что-то другое!!!');
 						//console.log('Получено байт = ', bytes.length);
@@ -279,27 +310,6 @@ connection.connect(function(err) {
 			console.log('!!!ERROR', err);
 			removeTCPClient(socket);
 		});
-
-		connection.query(`SELECT * FROM messages;`, function (error, results, fields) {
-			if (error) throw error;
-			const messages = results;
-
-			messages.forEach(message => {
-				let data = {
-					"text": message["text"],
-					"user_id": message["ID_USER"],
-					"user": "Вася",
-					"image": message["image"] || ""
-				};
-				console.log('init data = ', data);
-				data = Buffer.from(JSON.stringify(data)) + '\1' + '\0';
-				socket.write(data);
-			});
-
-		});
-
-
-
 
 		//socket.end('goodbye\n');
 	}).on('error', (err) => {
