@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
+const formidable = require('formidable');
 
 
 const mysql      = require('mysql');
@@ -175,6 +176,64 @@ app.get('/admin', function (req, res) {
 	});
 });
 
+
+app.get('/document', function(req, res) {
+	res.send(`
+		<html>
+			<head>
+				<title>Добавить документ</title>
+			</head>
+			<body>
+				<form action="/document" method="POST" enctype="multipart/form-data">
+					<input type="file" name="file">
+					<input type="submit" value="Отправить">
+				</form>
+			</body>
+		</html>
+	`);
+});
+
+
+app.post('/document', function(req, res) {
+	const form = formidable({ multiples: false });
+	
+	form.on('fileBegin', function(name, file) {
+		var arr = file.name.split('.');
+		var newName = arr.slice(0, arr.length - 1).join(".") + "-" + parseInt(Math.random()*10**12).toString() + '.' + arr[arr.length - 1];
+		file.path = path.join(__dirname, 'static', 'files', newName);
+	});
+	
+	form.parse(req, (err, fields, files) => {
+		if (err) {
+			console.log('ERROR!!!!!!!!!!!!!!!!!');
+			throw err;
+		}
+		res.json({ fields, files });
+    });
+});
+
+
+
+app.get('/documents', function(req, res) {
+	fs.readdir(path.join(__dirname, "static", "files"), (err, files) => {
+		console.log('files = ', files);
+		const data = files.map(filename => ({"filename": filename}));
+		res.send(data);
+	});
+});
+
+
+app.get('/download/:filename', function(req, res) {
+	try {
+		const filename = req.params.filename;
+		const filepath = path.join(__dirname, "static", "files", filename);
+		//filestream = fs.createReadStream(filepath);
+		//filestream.pipe(res);
+		res.download(filepath);
+	} catch(err) {
+		res.send('Нет такого файла');
+	}
+});
 
 
 connection.connect(function(err) {
