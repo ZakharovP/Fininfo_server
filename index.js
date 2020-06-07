@@ -7,24 +7,27 @@ const fs = require('fs');
 const path = require('path');
 const formidable = require('formidable');
 
-
+//установка соединения с БД
 const mysql      = require('mysql');
 const connection = mysql.createConnection({
 	host     : '127.0.0.3',
 	user     : 'root',
 	password : '12345',
-	database : 'fininfo_bd'
+	database : 'fininfo_bd',
+	multipleStatements: true
 });
 
 app.use("/static", express.static(path.join(__dirname, '/static')));
 app.use(bodyParser());
 
+
+// стартовая страница в вебе (заглушка)
 app.get('/', function (req, res) {
 	res.setHeader('content-type', 'text/html');
-
 	res.send('Hello <b>World!</b>');
 });
 
+// получение списка учителей в json формате
 app.get('/teachers', function (req, res) {
 	connection.query('SELECT * FROM teachers', function (error, results, fields) {
 		if (error) throw error;
@@ -35,6 +38,7 @@ app.get('/teachers', function (req, res) {
 	});
 });
 
+// получение списка дисциплин и данных тех, кто их ведет в json формате
 app.get('/classes', function (req, res) {
 	connection.query(`
 		SELECT classes.*, CONCAT(teachers.SECOND_NAME, ' ', teachers.FIRST_NAME, ' ', teachers.THIRD_NAME) TEACHER_NAME, groups.GROUP_NAME
@@ -49,43 +53,38 @@ app.get('/classes', function (req, res) {
 		});
 });
 
-
+// обработка логина в виде GET запросва (для тестирования)
 app.get('/login', function (req, res) {
 	const login = req.query["login"] || "";
 	const password = req.query["password"] || "";
-	//console.log('login = ', login);
-	//console.log('password = ', password);
 	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}' AND PASSWORD = '${password}';`, function (error, results, fields) {
 		if (error) throw error;
 		const amount = results.length;
-		//console.log('amount = ', amount);
 		if (amount === 0) {
 			return res.send({success: false, error: "Имя пользователя или пароль неправильные!"});
 		}
 		const user = results[0];
-		//console.log('user = ', user);
 		res.send({success: true, user: user});
 	});
 });
 
-
+// обработка логина в POST запросе
 app.post('/login', function (req, res) {
-	//console.log('body = ', req.body);
 	const login = req.body["login"] || "";
 	const password = req.body["password"] || "";
 	connection.query(`SELECT * FROM users WHERE LOGIN = '${login}' AND PASSWORD = '${password}';`, function (error, results, fields) {
 		if (error) throw error;
 		const amount = results.length;
-		//console.log('amount = ', amount);
 		if (amount === 0) {
 			return res.send({success: false, error: "Имя пользователя или пароль неправильные!"});
 		}
 		const user = results[0];
-		//console.log('user = ', user);
-		res.send({success: true, user: user});
+		res.send({success: true, userId: user['ID_USER']});
 	});
 });
 
+
+// обработка регистрации нового пользователя в GET запросе (для тестирования)
 app.get('/register', function (req, res) {
 	const login = req.query["login"] || "";
 	const password = req.query["password"] || "";
@@ -104,12 +103,20 @@ app.get('/register', function (req, res) {
 			INSERT INTO users(ID_USER, LOGIN, PASSWORD, FIRST_NAME, SECOND_NAME, THIRD_NAME, IS_ADMIN) VALUES (
 				DEFAULT, '${login}', '${password}', '${firstName}', '${secondName}', '${thirdName}', FALSE
 			);
+			SELECT LAST_INSERT_ID();
 		`;
-		connection.query(query);
-		res.send({success: true});
+		connection.query(query, function (error, results, fields) {
+			if (error) throw error;
+			const userId = results[0].insertId;
+
+			res.send({success: true, userId: userId});
+		});
+		
 	});
 });
 
+
+// обработка регистрации нового пользователя в POST запросе
 app.post('/register', function (req, res) {
 	const login = req.body["login"] || "";
 	const password = req.body["password"] || "";
@@ -128,12 +135,20 @@ app.post('/register', function (req, res) {
 			INSERT INTO users(ID_USER, LOGIN, PASSWORD, FIRST_NAME, SECOND_NAME, THIRD_NAME, IS_ADMIN) VALUES (
 				DEFAULT, '${login}', '${password}', '${firstName}', '${secondName}', '${thirdName}', FALSE
 			);
+			SELECT LAST_INSERT_ID();
 		`;
-		connection.query(query);
-		res.send({success: true});
+		connection.query(query, function (error, results, fields) {
+			if (error) throw error;
+			const userId = results[0].insertId;
+
+			res.send({success: true, userId: userId});
+		});
+		
 	});
 });
 
+
+// получение списка чат-комнат
 app.get('/rooms', function(req, res) {
 	const query = `
 		SELECT * FROM rooms;
@@ -141,14 +156,13 @@ app.get('/rooms', function(req, res) {
 	connection.query(query, function(error, results, fields) {
 		if (error) throw error;
 		const rooms = JSON.stringify(results);
-		console.log("rooms = ", rooms);
 		res.setHeader('content-type', 'application/json');
 		res.send(rooms);
-		//res.send("rooms ok!!!!");
 	});
 	
 });
 
+// создание новой чат-комнаты
 app.post('/create_room', function(req, res) {
 	const roomTitle = req.body["room"] || "";
 	if (!roomTitle) {
@@ -164,10 +178,9 @@ app.post('/create_room', function(req, res) {
 		const newRoom = JSON.stringify(results);
 		res.send({success: true, id: results.insertId, title: roomTitle});
 	});
-	
 });
 
-
+// изменение статуса пользователя
 app.get('/admin', function (req, res) {
 	const id = +req.query["id"] || -1;
 	connection.query(`UPDATE users SET IS_ADMIN=1 WHERE ID_USER='${id}'`, function (error, results, fields) {
@@ -176,7 +189,7 @@ app.get('/admin', function (req, res) {
 	});
 });
 
-
+// получение формы для загрузки документа на сервер в браузере (для тестирования)
 app.get('/document', function(req, res) {
 	res.send(`
 		<html>
@@ -193,7 +206,7 @@ app.get('/document', function(req, res) {
 	`);
 });
 
-
+// загрузка нового документа через браузер (для тестирования)
 app.post('/document', function(req, res) {
 	const form = formidable({ multiples: false });
 	
@@ -213,22 +226,19 @@ app.post('/document', function(req, res) {
 });
 
 
-
+// получение списка всех документов
 app.get('/documents', function(req, res) {
 	fs.readdir(path.join(__dirname, "static", "files"), (err, files) => {
-		console.log('files = ', files);
 		const data = files.map(filename => ({"filename": filename}));
 		res.send(data);
 	});
 });
 
-
+// скачивание документа по его имени
 app.get('/download/:filename', function(req, res) {
 	try {
 		const filename = req.params.filename;
 		const filepath = path.join(__dirname, "static", "files", filename);
-		//filestream = fs.createReadStream(filepath);
-		//filestream.pipe(res);
 		res.download(filepath);
 	} catch(err) {
 		res.send('Нет такого файла');
@@ -236,65 +246,109 @@ app.get('/download/:filename', function(req, res) {
 });
 
 
+const tmpIds = {}; // нужно для сохранения связи картинок/файлов и идентификатора сообщения
+
+// получение данных пользователя по его id
+async function getUser(userId) {
+	return new Promise((resolve, reject) => {
+		connection.query(`SELECT * FROM users WHERE ID_USER=${userId};`, function (error, results, fields) {
+			if (error) reject(error);
+			resolve(results && results.length ? results[0] : null);
+		});
+	});
+}
+
+// устанавливаем соедение с БД
 connection.connect(function(err) {
 	if (err) {
 		console.error('error connecting: ' + err.stack);
 		throw err;
 	}
 	console.log("Соединение с БД успешно запущено!");
-
-	//console.log('connected as id ' + connection.threadId);
+	
+	// запуск веб-сервера
 	app.listen(3000, function () {
 	  console.log('Example app listening on port 3000!');
 	});
 
 
-	tcpClients = [];
+	tcpClients = [];  // массив подключений через TCP
+	// удаление из списка TCP соединения
 	function removeTCPClient(socket) {
 		const index = tcpClients.indexOf(socket);
 		if (index > -1) {
 			tcpClients.splice(index, 1);
 		}
 	}
-
+	
+	// создаем TCP сервер
 	const server = net.createServer((socket) => {
-		console.log('new socket!!!');
-		tcpClients.push(socket);
-		let body = Buffer.from('');
-		socket.on('data', bytes => {
+		// подключается по TCP новый клиент
+		console.log('Новый сокет!');
+		tcpClients.push(socket);  // сохраняем клиента
+		let body = Buffer.from('');  // данные из сокета клиента
+		socket.on('data', async bytes => {
+			// при получении новых данных из сокета дописываем их впеременную
 			body = Buffer.concat([body, bytes]);
-			//console.log('Получено байт = ', bytes.length);
-			//console.log('Всего байт в body = ', body.length)
+			
+			// ищем специальный разделитель сообщений - нулевой байт
 			const sepIndex = body.lastIndexOf('\0');
-			const userId = 8;
+			
+			// если специальный разделитель найден
 			if (sepIndex > -1) {
+				// получаем набор целых сообщений
 				const datas = body.slice(0, sepIndex).toString();
+				// сохраняем остаток
 				body = body.slice(sepIndex + 1, body.length);
+				// проходим в цикле по всем сообщениям, получив их разбиением байтов по нулевому байту
 				for (data of datas.split("\0")) {
+					// определяем тип данных по последнему байту
 					const dataType = data[data.length-1];
+					
+					// само сообщение
 					data = data.slice(0, data.length - 1);
-					//console.log('!!!!');
-					if (dataType === '\1') {
-						//console.log('data = ', data);
-						//console.log('string data = ', data.toString());
+					if (dataType === '\1') { // если тектовое сообщение
+						// преобразуем в объект javascript
 						data = JSON.parse(data);
-						const dataType = data["type"];
-						console.log("TCP::: получены данные = ", data);
 						
-						if (dataType === "new") {
-							const text = data["text"];
-							const roomId = data["roomId"];
-							connection.query(`INSERT INTO messages(ID_USER, text, ID_ROOM) VALUES(${userId}, '${text}', ${roomId})`, function (error, results, fields) {
+						// тип текстового сообщения - новое или получение истории
+						const dataType = data["type"];
+
+						const userId = +data["userId"];
+						const user = await getUser(userId);
+						
+						
+						if (dataType === "new") { // если новое сообщение
+							const text = data["text"]; // текст сообщения
+							const roomId = data["roomId"]; // чат-комната
+							const uid = data["uid"]; // уникальный номер сообщения для связи текстовой части с файловой
+							let image = "";
+							let file = "";
+							// ищем, была ли загружена картинка или файл для этого сообщения
+							if (tmpIds[uid] && tmpIds[uid]["image"]) {
+								image = tmpIds[uid]["image"];
+							}
+							if (tmpIds[uid] && tmpIds[uid]["file"]) {
+								file = tmpIds[uid]["file"];
+							}
+							
+							// вставляем новое сообщение
+							connection.query(`INSERT INTO messages(ID_USER, text, ID_ROOM, image, file) VALUES(${userId}, '${text}', ${roomId}, '${image}', '${file}')`, function (error, results, fields) {
 								if (error) throw error;
-								//console.log('data = ', data);
+								
+								delete tmpIds[uid];
+						
+								
 								let newData = {
 									"text": text,
 									"user_id": userId,
-									"user": "Вася",
-									"image": ""
+									"user": user['FIRST_NAME'] + " " + user['SECOND_NAME'],
+									"image": image,
+									"file": file
 								};
-								console.log('newData = ', data);
 								newData = Buffer.from(JSON.stringify(newData)) + '\1' + '\0';
+								
+								// отправляем все соединениям из этой комнаты новое сообщение
 								tcpClients.forEach(client => {
 									if (roomId === client.roomId) {
 										console.log("Отправка ...");
@@ -302,55 +356,68 @@ connection.connect(function(err) {
 									}
 								});
 							});
-						} else if (dataType === "init") {
+						} else if (dataType === "init") { // если получаем историю сообщений
 							const roomId = data["roomId"];
 							socket.roomId = roomId;
 							connection.query(`SELECT * FROM messages WHERE ID_ROOM=${roomId};`, function (error, results, fields) {
 								if (error) throw error;
 								const messages = results;
 
-								messages.forEach(message => {
-									let data = {
-										"text": message["text"],
-										"user_id": message["ID_USER"],
-										"user": "Вася",
-										"image": message["image"] || ""
-									};
-									console.log('init data = ', data);
-									data = Buffer.from(JSON.stringify(data)) + '\1' + '\0';
-									socket.write(data);
+								messages.forEach(async message => {
+									const user = await getUser(message["ID_USER"]);
+									if (user) {
+										let data = {
+											"text": message["text"],
+											"user_id": message["ID_USER"],
+											"user": user['FIRST_NAME'] + " " + user['SECOND_NAME'],
+											"image": message["image"] || "",
+											"file": message["file"] || ""
+										};
+										data = Buffer.from(JSON.stringify(data)) + '\1' + '\0';
+										socket.write(data);
+									}
 								});
 
 							});
 						}
 
 						
-					} else if (dataType === '\2') {
-						//console.log('Что-то другое!!!');
-						//console.log('Получено байт = ', bytes.length);
-						//console.log('Всего байт = ', body.length)
-						let buff = Buffer.from(data, 'base64');
-						//console.log('Декодированных байт = ', decodedData.length);
-						const filename = parseInt(Math.random() * 10**14).toString() + ".jpg";
+					} else if (dataType === '\2') { // если это файловый тип данных
+						const buff = Buffer.from(data);
+						//разделить, отделяющий сам файл от метаданных о нем
+						const delimiterIndex = buff.lastIndexOf('\3');
+						
+						
+						if (delimiterIndex === -1) {
+							throw new Error("Неправильный формат данных!!!");
+						}
+						
+						// получаем в байтах сам файл и объект javascript из метаданных
+						const fileData = Buffer.from(buff.slice(0, delimiterIndex).toString('ascii'), 'base64');
+						const metaData = JSON.parse(Buffer.from(buff.slice(delimiterIndex + 1, buff.length).toString('utf-8'), 'base64').toString('utf-8'));
+		
+						const fileArr = metaData["filename"].split(".");
+						
+						// формируем имя и путь нового файла в заивисмости от его типа (картинка, документ)
+						const filename = fileArr.slice(0, fileArr.length-1).join(".") + "-" + parseInt(Math.random()*10**14) + "." + fileArr[fileArr.length-1];
+						const type = metaData["type"];
+						const uid = metaData["uid"];
+						if (tmpIds[uid] === undefined) {
+							tmpIds[uid] = {};
+						}
+						tmpIds[uid][type] = filename;
+						
+						let fullpath;
+						if (type === 'image') {
+							fullpath = path.join('static', 'img', filename);
+						} else {
+							fullpath = path.join('static', 'files', filename);
+						}
 
-						fs.writeFile(path.join('static', 'img', filename), buff, (error) => {
+						// сохраянем файл
+						fs.writeFile(fullpath, fileData, (error) => {
 							if (error) throw err;
-							connection.query(`INSERT INTO messages(ID_USER, text, image) VALUES(${userId}, '', '${filename}')`, function (error, results, fields) {
-								let newData = {
-									"text": "",
-									"image": filename,
-									"user_id": userId,
-									"user": "Вася"
-								};
-								newData = Buffer.from(JSON.stringify(newData)) + '\1' + '\0';
-								tcpClients.forEach(client => {
-									console.log("Отправка картинки ...");
-									client.write(newData);
-								});
-							});
 						});
-						//body = Buffer.from('');
-						console.log('СОХРАНЕНО!!!');
 					}
 
 				}
@@ -375,27 +442,7 @@ connection.connect(function(err) {
 		throw err;
 	});
 
-
-
 	server.listen(3001, () => {
 	  console.log('opened server on', server.address());
 	});
-
-
-
-
-	/*const startDate = "2020.02.24";
-	const finishDate = "2020.03.01";
-	const url = `https://ruz.fa.ru/api/schedule/group/8892?start=${startDate}&finish=${finishDate}`;
-	console.log('url = ', url);
-	https.get(url, (resp) => {
-		let data = '';
-		resp.on('data', (chunk) => {
-			data += chunk;
-		});
-		resp.on('end', () => {
-			const obj = JSON.parse(data);
-			//console.log("obj = ", obj);
-		});
-	});*/
 });
